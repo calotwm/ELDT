@@ -75,4 +75,5 @@ Planned slices: (1) data: scraper + clubs.js + images; (2) engine core: util, po
 - Engram mirror: PENDING (engram tools unavailable in sessions 1 and 2).
 - Session 1 left T1 partly done, uncommitted: scraper extended, `clubs.js` regenerated, ~50 new crests/flags untracked.
 - T1 done: Copa Argentina added (30 primera + 34 ascenso, 8 in promotion pool, strength 55-59.5). Commit 5b6e38f on `feat/elmanager-01-data`. Checks: `node --check scripts/scrape.mjs` OK; scraper run OK (warning: a few players with empty position fall back to group default). Review assess: medium, `under_budget` (201 lines) -> pending in slice.
-- T2 in progress on `feat/elmanager-02-engine` (stacked on 01): delegated writer with engine spec (session scratchpad).
+- PR https://github.com/calotwm/ELDT/pull/1 opened from `feat/elmanager-02-engine` (data slice + this doc, commits 5b6e38f, 3a4b2cd).
+- T2 done on `feat/elmanager-03-engine` (stacked on 02): commits 5548a00 (core), 30ab630 (league/cups/season), baa863a (market/career/save/test), 4048 lines. Checks: `node --check` all engine files OK; `node scripts/test-engine.mjs 314159` -> 42190 checks, 0 failures, Copa Argentina ascenso champion 1.5% of 200 editions (writer also ran 8 seeds + all-30-clubs stress: 0 failures). Review assess: medium, 4048 lines -> review due; consent pending.
