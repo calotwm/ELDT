@@ -86,3 +86,7 @@ Career-mode direction dropped ("no quería una copia del modo carrera"). New sco
 - Removed from scope: match-by-match play, calendar navigation, news inbox, board/objectives/sacking (relegation still ends the career), friendlies, injuries, AI offers, contracts.
 - Partial part-A UI discarded. New branch `feat/elmanager-05-simple` (stacked on 04).
 - Tasks now: S1 scraper leagues (delegated, background); S2 engine trim + simplified UI (one delegated writer); S3 QA key screens (title, hub, pitch, results at 1440/390) + HTML read of the rest; S4 README + Railway server.
+- S1 done: Paraguay, Colombia, Chile top 5 per club; Uruguay top 5 (commit 4dcbd2c). foreignClubs 77 -> 125.
+- S2 done (delegated writer): engine trimmed to one-click seasons (preseason.js tasks, career.js simulateSeason/nextSeason, difficulty Fácil/Normal/Difícil = +3/+1.5/+0 strength; Normal mid club ~4.9 places above its strength rank over 30 seeded seasons), FIFA 14-style UI (charcoal, flat tiles, lime highlight), old UI files deleted. Checks: `node --check` all js OK; `node scripts/test-engine.mjs` OK on 4 seeds (0 failures).
+- S3 QA: desktop 1440 (title, club select, hub, all 5 tasks, pitch with GK at bottom, results) and mobile 375 (title, results, hub, formation): no horizontal overflow, no console errors, Cafecito link opens new tab. Fixed: stat values wrapping on mobile (nowrap + clamp).
+- S4 done: `server.mjs` + `package.json` (npm start/test/scrape) for Railway; README rewritten.
