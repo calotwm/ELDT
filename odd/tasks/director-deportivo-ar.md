@@ -22,7 +22,7 @@ Original game covers 6 Premier League clubs. User wants the same experience with
 - [x] T2 Game UI + logic (index.html, css, js). Route: delegated writer (2+ non-trivial files).
 - [x] T3 Smoke check in browser at mobile width, fix issues.
 - [x] T4 Scraper: international market (Brasileirão top 5/club, Uruguay top 4/club, Argentines >=28 in top-5 Europe + Portugal, >=26 in MLS/Liga MX) -> LEAGUE_DATA.foreignClubs. Route: inline.
-- [ ] T5 Rename game to "EL DT"; integrate foreignClubs into signing market (region filter, league label); README. Route: delegated writer.
+- [x] T5 Rename game to "EL DT"; integrate foreignClubs into signing market (region filter, league label); README. Route: delegated writer.
 - [ ] T6 Push to GitHub calotwm/ELDT (user-authorized destination and operation).
 
 ## Acceptance criteria
@@ -42,3 +42,4 @@ Strategy: ask-on-risk. Branch `feat/game`.
 - T3: CDP smoke at 390x844 mobile: full flow (Boca: pre-season, sell, loan, sign, formation, simulate) reached 5/5 and results; no horizontal overflow; no console errors. Fixed: raw country codes in player rows, league table cut off (now DG/Pts fits), English filter chips (now Spanish labels), choice cards as <button>.
 - Review (reliability lens) approved + acknowledged for da1306e. Fixed its 2 warnings: simulate now requires complete XI; undoing sales/loans checks budget and squad cap. Regression script passed.
 - Open suggestion: no committed automated tests (tests live in session scratchpad).
+- T5: renamed to EL DT; foreign market (1090 players in pool) with region filter, Vuelve badge, 60-row cap; README. Checks: node --check OK, headless + regress + foreign signing tests passed, CDP smoke 5/5 at 390px, no errors.

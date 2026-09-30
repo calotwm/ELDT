@@ -299,17 +299,42 @@
   // ---------------- SIGN ----------------
   var signSearch = '';
   var signPosFilter = 'ALL';
+  var signRegionFilter = 'ALL';
   var SIGN_POS_LIST = ['ALL', 'GK', 'CB', 'LB', 'RB', 'CDM', 'CM', 'CAM', 'LM', 'RM', 'LW', 'RW', 'ST'];
+  var SIGN_REGION_LIST = ['ALL', 'ARG', 'Brasil', 'Uruguay', 'Europa', 'América'];
+  var SIGN_REGION_LABELS = {
+    ALL: 'Todos',
+    ARG: 'Liga Profesional',
+    Brasil: 'Brasil',
+    Uruguay: 'Uruguay',
+    Europa: 'Europa',
+    'América': 'América'
+  };
+  var DOMESTIC_REGION = 'ARG';
 
+  // Domestic clubs get a synthetic region/league tag so filtering and player-row
+  // meta can treat them the same way as scraped foreign clubs.
   function marketPool(app) {
     var state = app.state;
     var ownId = state.clubId;
     var pool = [];
     global.LEAGUE_DATA.clubs.forEach(function (c) {
       if (c.id === ownId) return;
-      c.players.forEach(function (p) { pool.push({ player: p, club: c }); });
+      c.players.forEach(function (p) {
+        pool.push({ player: p, club: c, region: DOMESTIC_REGION, league: 'Liga Profesional' });
+      });
+    });
+    (global.LEAGUE_DATA.foreignClubs || []).forEach(function (c) {
+      c.players.forEach(function (p) {
+        pool.push({ player: p, club: c, region: c.region, league: c.league });
+      });
     });
     return pool;
+  }
+
+  // Argentine players returning from a foreign league (Europe or the Americas).
+  function isReturningArgentine(item) {
+    return item.region !== DOMESTIC_REGION && item.player.nat === 'ba';
   }
 
   function renderSign(app) {
@@ -327,6 +352,10 @@
     search.value = signSearch;
     search.style.marginBottom = '10px';
     body.appendChild(search);
+
+    var regionRow = document.createElement('div');
+    regionRow.className = 'pos-filter-row region-filter-row';
+    body.appendChild(regionRow);
 
     var filterRow = document.createElement('div');
     filterRow.className = 'pos-filter-row';
@@ -360,15 +389,36 @@
       });
     }
 
+    function renderRegionFilters() {
+      regionRow.innerHTML = '';
+      SIGN_REGION_LIST.forEach(function (region) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'pos-filter-btn' + (signRegionFilter === region ? ' active' : '');
+        btn.textContent = SIGN_REGION_LABELS[region].toUpperCase();
+        btn.addEventListener('click', function () {
+          signRegionFilter = region;
+          renderRegionFilters();
+          renderMarketList();
+        });
+        regionRow.appendChild(btn);
+      });
+    }
+
     function renderMarketList() {
       listWrap.innerHTML = '';
       var q = signSearch.trim().toLowerCase();
       var signedIds = state.signedPlayers.map(function (p) { return p.id; });
-      var items = marketPool(app).filter(function (item) {
+      var allItems = marketPool(app).filter(function (item) {
         if (signPosFilter !== 'ALL' && item.player.pos !== signPosFilter) return false;
-        if (q && item.player.name.toLowerCase().indexOf(q) === -1 && item.club.name.toLowerCase().indexOf(q) === -1) return false;
+        if (signRegionFilter !== 'ALL' && item.region !== signRegionFilter) return false;
+        if (q &&
+          item.player.name.toLowerCase().indexOf(q) === -1 &&
+          item.club.name.toLowerCase().indexOf(q) === -1 &&
+          item.league.toLowerCase().indexOf(q) === -1) return false;
         return true;
-      }).sort(function (a, b) { return b.player.rating - a.player.rating; }).slice(0, 60);
+      }).sort(function (a, b) { return b.player.rating - a.player.rating; });
+      var items = allItems.slice(0, 60);
 
       if (!items.length) {
         var none = document.createElement('div');
@@ -378,13 +428,24 @@
         return;
       }
 
+      if (allItems.length > items.length) {
+        var hint = document.createElement('div');
+        hint.className = 'no-results';
+        hint.textContent = 'Mostrando 60 de ' + allItems.length + ' — filtrá para ver más.';
+        listWrap.appendChild(hint);
+      }
+
       items.forEach(function (item) {
         var price = GL.buyPriceForPlayer(item.player, item.club);
         var isSigned = signedIds.indexOf(item.player.id) !== -1;
         var overBudget = !isSigned && price > GS.remainingBudget(state);
         var overSquad = !isSigned && GS.squadSize(state) >= GL.MAX_SQUAD_SIZE;
+        var metaExtra = item.region === DOMESTIC_REGION
+          ? item.club.shortName
+          : item.club.shortName + ' · ' + item.league;
+        if (isReturningArgentine(item)) metaExtra += ' · Vuelve';
         var row = U.buildPlayerRow(item.player, {
-          metaExtra: item.club.shortName,
+          metaExtra: metaExtra,
           priceOverride: price,
           selected: isSigned,
           showCheck: true,
@@ -435,6 +496,7 @@
     });
 
     updateBudgetChip();
+    renderRegionFilters();
     renderFilters();
     renderMarketList();
     renderSignedSummary();
