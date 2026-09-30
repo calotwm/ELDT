@@ -139,14 +139,18 @@ const FAME = {
   2: ['Cristian Romero', 'Emilliano Buendía', 'Giovani Lo Celso', 'Nahuel Molina', 'Gonzalo Montiel',
     'Marcos Acuña', 'Nicolás Tagliafico', 'Gerónimo Rulli', 'Juan Foyth', 'Giovanni Simeone',
     'Lucas Ocampos', 'Juan Musso', 'Lucas Martínez Quarta', 'Thiago Almada', 'Angel Correa',
-    'Sebastián Driussi', 'Enner Valencia', 'Miguel Merentiel', 'Jorge Carrascal', 'Pedro', 'José Paradela'],
+    'Sebastián Driussi', 'Enner Valencia', 'Miguel Merentiel', 'Jorge Carrascal', 'Pedro', 'José Paradela',
+    'Giorgian de Arrascaeta'],
 };
 const FAME_BONUS = { 3: { value: 6, rating: 3 }, 2: { value: 3, rating: 2 } };
 const FAME_BY_NAME = new Map(Object.entries(FAME).flatMap(([level, names]) => names.map((n) => [n, Number(level)])));
 const fameMatches = new Set();
 
 // Game-design overrides (user request): Messi is the hardest signing in the game.
-const PLAYER_OVERRIDE = { 'Lionel Messi': { rating: 85, value: 30 } };
+const PLAYER_OVERRIDE = {
+  'Lionel Messi': { rating: 85, value: 30 },
+  'Giorgian de Arrascaeta': { rating: 82, value: 12 },
+};
 
 function applyFame(player) {
   const famous = applyFameBonus(player);
@@ -279,6 +283,9 @@ const FOREIGN_SOURCES = [
   { key: 'ligamx', label: 'Liga MX', region: 'América', path: '/league/liga-mx/beb', baseRating: 69, tier: 2, pick: argentinesAged(26) },
 ];
 
+// Players always added to the foreign market even if the league's pick rule leaves them out (user requests).
+const MUST_PICK = new Set(['Giorgian de Arrascaeta']);
+
 // Younger Argentines in Europe (not picked by the age filter): the best EUROPE_EXTRA_COUNT join the market.
 const EUROPE_EXTRA_COUNT = 15;
 const europeExtras = [];
@@ -326,7 +333,8 @@ async function scrapeForeignSource(source, countries) {
       continue;
     }
     const club = parseTeam(team, data.props.pageProps.data, source);
-    const players = source.pick(club.players);
+    const picked = source.pick(club.players);
+    const players = picked.concat(club.players.filter((p) => MUST_PICK.has(p.name) && !picked.includes(p)));
     if (source.region === 'Europa') collectEuropeExtras(club, source, players);
     if (!players.length) continue;
     players.forEach((p) => countries.add(p.nat));
