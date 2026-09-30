@@ -19,8 +19,8 @@ Original game covers 6 Premier League clubs. User wants the same experience with
 
 ## Tasks
 - [x] T1 Scraper + value formula -> `public/data/clubs.js`, crests, flags. Route: inline (single file, understood).
-- [ ] T2 Game UI + logic (index.html, css, js). Route: delegated writer (2+ non-trivial files).
-- [ ] T3 Smoke check in browser at mobile width, fix issues.
+- [x] T2 Game UI + logic (index.html, css, js). Route: delegated writer (2+ non-trivial files).
+- [x] T3 Smoke check in browser at mobile width, fix issues.
 
 ## Acceptance criteria
 - 30 clubs selectable; each squad matches Promiedos.
@@ -34,3 +34,6 @@ Strategy: ask-on-risk. Branch `feat/game`.
 
 ## Progress
 - Repo initialized, branch `feat/game`.
+- Engram mirror: PENDING (engram reported ambiguous_project; neither listed project matches this repo).
+- T2: delegated writer built public/index.html, css/styles.css, js/{formations,logic,state,ui-common,screens,tasks,main}.js. node --check OK; headless logic test ALL ASSERTIONS PASSED.
+- T3: CDP smoke at 390x844 mobile: full flow (Boca: pre-season, sell, loan, sign, formation, simulate) reached 5/5 and results; no horizontal overflow; no console errors. Fixed: raw country codes in player rows, league table cut off (now DG/Pts fits), English filter chips (now Spanish labels), choice cards as <button>.
