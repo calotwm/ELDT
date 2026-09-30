@@ -23,7 +23,7 @@ Original game covers 6 Premier League clubs. User wants the same experience with
 - [x] T3 Smoke check in browser at mobile width, fix issues.
 - [x] T4 Scraper: international market (Brasileirão top 5/club, Uruguay top 4/club, Argentines >=28 in top-5 Europe + Portugal, >=26 in MLS/Liga MX) -> LEAGUE_DATA.foreignClubs. Route: inline.
 - [x] T5 Rename game to "EL DT"; integrate foreignClubs into signing market (region filter, league label); README. Route: delegated writer.
-- [ ] T6 Push to GitHub calotwm/ELDT (user-authorized destination and operation).
+- [x] T6 Push to GitHub calotwm/ELDT (user-authorized destination and operation).
 
 ## Acceptance criteria
 - 30 clubs selectable; each squad matches Promiedos.
@@ -43,3 +43,4 @@ Strategy: ask-on-risk. Branch `feat/game`.
 - Review (reliability lens) approved + acknowledged for da1306e. Fixed its 2 warnings: simulate now requires complete XI; undoing sales/loans checks budget and squad cap. Regression script passed.
 - Open suggestion: no committed automated tests (tests live in session scratchpad).
 - T5: renamed to EL DT; foreign market (1090 players in pool) with region filter, Vuelve badge, 60-row cap; README. Checks: node --check OK, headless + regress + foreign signing tests passed, CDP smoke 5/5 at 390px, no errors.
+- T6: pushed main (9fdbe87) to https://github.com/calotwm/ELDT.
