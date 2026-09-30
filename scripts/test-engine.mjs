@@ -121,8 +121,10 @@ function checkNoDoubleDates(season, label) {
 
 // ---- pre-season tasks, driven through the public API -------------------------------------------------
 function cheapest(game, n, filters = {}) {
-  const { items } = EM.Career.search(game, filters);
-  return items.filter((i) => i.price <= game.career.budget).sort((a, b) => a.price - b.price).slice(0, n);
+  // Search per position so cheap players are not cut off by the rating-sorted result limit.
+  const positions = filters.pos ? [filters.pos] : Object.keys(EM.Positions.META);
+  const items = positions.flatMap((pos) => EM.Career.search(game, Object.assign({ interested: true }, filters, { pos })).items);
+  return items.filter((i) => i.price <= game.career.budget && i.interest.level === 'yes').sort((a, b) => a.price - b.price).slice(0, n);
 }
 
 function doPreseason(game, label) {
@@ -203,6 +205,12 @@ function doPreseason(game, label) {
     ok(res.items.every((i) => i.region === rg), `${label}: region filter ${rg}`);
   }
   ok(EM.Career.search(game, { q: 'MESSI' }).items.every((i) => EM.Util.norm(i.player.name).includes('messi') || EM.Util.norm(i.club.name).includes('messi')), `${label}: accent/case-insensitive search`);
+  const refuser = EM.Career.search(game, {}).items.find((i) => i.interest.level === 'no' && i.price <= career.budget);
+  if (refuser) {
+    const rr = EM.Career.signPlayer(game, refuser.player.id);
+    ok(!rr.ok && rr.code === 'refused', `${label}: uninterested player refuses`);
+    ok(EM.Career.signPlayer(game, refuser.player.id).code === 'refused', `${label}: refusal sticks for the pre-season`);
+  }
   ok(EM.Career.confirmSigning(game).ok && career.tasks.sign, `${label}: sign done`);
   while (club.players.length < 18) {
     const c = cheapest(game, 1)[0];

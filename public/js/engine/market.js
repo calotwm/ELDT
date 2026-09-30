@@ -24,6 +24,57 @@
     return Math.max(0.1, U.round1(player.value * (TIER_MULT[club.tier] || 1)));
   }
 
+  // ---- player interest ----------------------------------------------------------------------------------------------------
+  // Game parameters (not real data): how attractive the user club is and how demanding a player is.
+  const PRESTIGE_BASE = { 1: 78, 2: 62, 3: 46 };
+  const ORIGIN_DEMAND = { ARG: 0, Brasil: 6, Uruguay: 0, Paraguay: 0, Colombia: 2, Chile: 0, Europa: 18, 'América': 8 };
+  const FAME_DEMAND = { 2: 16, 3: 50 };
+  const INTEREST_YES = 5;          // score at or above: the player accepts
+  const INTEREST_MAYBE = -10;      // score at or above: the player may accept (deterministic per season)
+
+  // Club prestige 20..100: size (tier), last season's table position and titles, and current continental cup.
+  function prestigeOf(world, career) {
+    const club = world.clubs[career.clubId];
+    let score = PRESTIGE_BASE[club.tier] || 46;
+    const last = career.history[career.history.length - 1];
+    if (last) {
+      score += U.clamp((15 - last.annualPos) * 0.8, -10, 10);
+      score += Math.min(10, last.titles.length * 5);
+    }
+    const q = world.qualified || {};
+    if ((q.libertadores || []).indexOf(club.id) >= 0) score += 8;
+    else if ((q.sudamericana || []).indexOf(club.id) >= 0) score += 4;
+    return Math.round(U.clamp(score, 20, 100));
+  }
+
+  // How demanding a player is about his next club: quality, fame, league of origin and personal situation.
+  function demandOf(world, career, player, fromClub) {
+    const region = regionOf(fromClub);
+    let demand = (player.rating - 60) * 2.2 + (FAME_DEMAND[player.fame] || 0) + (ORIGIN_DEMAND[region] || 0);
+    if (region === 'ARG') demand += ((world.clubs[career.clubId].tier || 3) - (fromClub.tier || 3)) * 8;
+    if (player.nat === 'ba' && region !== 'ARG' && player.age >= 31) demand -= 12; // veterans like coming home
+    if (player.age >= 34) demand -= 6;
+    return demand;
+  }
+
+  // { level: 'yes'|'maybe'|'no', label, chance } for a player considering a move to the user club.
+  function interestOf(world, career, player, fromClub, prestige) {
+    const p = prestige != null ? prestige : prestigeOf(world, career);
+    const score = p - demandOf(world, career, player, fromClub);
+    if (score >= INTEREST_YES) return { level: 'yes', label: 'Interesado', chance: 1 };
+    if (score >= INTEREST_MAYBE) {
+      const chance = U.clamp((score - INTEREST_MAYBE) / (INTEREST_YES - INTEREST_MAYBE), 0.1, 0.9);
+      return { level: 'maybe', label: 'Lo duda', chance: chance };
+    }
+    return { level: 'no', label: 'No le interesa', chance: 0 };
+  }
+
+  // Deterministic decision for a doubtful player, so retrying in the same pre-season gives the same answer.
+  function decides(career, player, interest) {
+    if (interest.level !== 'maybe') return interest.level === 'yes';
+    return U.hash01(player.id + ':' + career.seasonIndex) < interest.chance;
+  }
+
   // Clubs the user can buy from: the other Liga Profesional clubs plus the foreign pool.
   function marketClubs(world, career) {
     const domestic = world.leagueIds.filter(function (id) { return id !== career.clubId; }).map(function (id) { return world.clubs[id]; });
@@ -37,11 +88,13 @@
     return room.length ? room : all;
   }
 
-  // filters: { q, pos, region }. Sorted by rating; `items` is cut to SEARCH_LIMIT, `total` is the full match count.
+  // filters: { q, pos, region, interested (hide players who would refuse) }. Sorted by rating; `items` is cut to SEARCH_LIMIT, `total` is the full match count.
   function search(world, career, f) {
     const filters = f || {};
     const q = filters.q ? U.norm(filters.q) : '';
     const items = [];
+    const prestige = prestigeOf(world, career);
+    const refused = (career.pre && career.pre.refused) || {};
     marketClubs(world, career).forEach(function (club) {
       const region = regionOf(club);
       if (filters.region && filters.region !== region) return;
@@ -49,7 +102,9 @@
         if (p.loan) return;
         if (filters.pos && p.pos !== filters.pos) return;
         if (q && U.norm(p.name).indexOf(q) < 0 && U.norm(club.name).indexOf(q) < 0) return;
-        items.push({ player: p, club: club, region: region, price: priceOf(p, club) });
+        const interest = refused[p.id] ? { level: 'no', label: 'Rechazó tu oferta', chance: 0 } : interestOf(world, career, p, club, prestige);
+        if (filters.interested && interest.level === 'no') return;
+        items.push({ player: p, club: club, region: region, price: priceOf(p, club), interest: interest });
       });
     });
     items.sort(function (a, b) { return (b.player.rating - a.player.rating) || (b.player.value - a.player.value) || (a.player.id < b.player.id ? -1 : 1); });
@@ -91,6 +146,9 @@
     REGIONS: REGIONS,
     regionOf: regionOf,
     priceOf: priceOf,
+    prestigeOf: prestigeOf,
+    interestOf: interestOf,
+    decides: decides,
     aiBuyers: aiBuyers,
     search: search,
     transfer: transfer,
