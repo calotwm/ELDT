@@ -77,7 +77,14 @@
       h('p', { class: 'info-bar fl-hint', text: 'Elegí una formación y tocá cada posición para asignar un jugador.' }),
       tabs,
       h('div', { class: 'fl-actions' },
-        UI.btn('Autocompletar', { icon: 'star', onClick: function () { run(EM.Career.autoFill(game)); } }),
+        UI.btn('Autocompletar', {
+          icon: 'star', title: 'Arma el mejor once probando todas las formaciones',
+          onClick: function () {
+            const r = EM.Career.autoFill(game);
+            run(r);
+            if (r.ok) UI.toast('Mejor formación: ' + r.formation + '.');
+          }
+        }),
         UI.btn('Limpiar', { kind: 'ghost', onClick: clearAll })),
       level);
     const handle = UI.openModal({

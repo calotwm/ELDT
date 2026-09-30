@@ -224,8 +224,11 @@ function doPreseason(game, label) {
   ok(!EM.Career.confirmFormation(game).ok, `${label}: empty XI cannot be confirmed`);
   const gk = club.players.filter((p) => p.pos === 'GK')[0];
   ok(EM.Career.assignSlot(game, 'gk', gk.id).ok && career.lineup.slots.gk === gk.id, `${label}: assign slot`);
-  ok(EM.Career.autoFill(game).ok, `${label}: autofill`);
-  eq(career.lineup.slots.gk, gk.id, `${label}: autofill keeps manual picks`);
+  const af = EM.Career.autoFill(game);
+  ok(af.ok && career.lineup.formation === af.formation, `${label}: autofill`);
+  const bestPossible = Math.max(...EM.Positions.FORMATION_NAMES.map((f) => EM.Squad.bestXI(club.players, f).strength));
+  ok(Math.abs(af.strength - bestPossible) < 0.06, `${label}: autofill picks the strongest formation`);
+  ok(EM.Squad.isComplete(career, club), `${label}: autofill completes the XI`);
   ok(EM.Career.confirmFormation(game).ok && career.tasks.formation, `${label}: formation confirmed`);
   const swapA = career.lineup.slots.cb1;
   const swapB = career.lineup.slots.cb2;
