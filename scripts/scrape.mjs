@@ -11,6 +11,15 @@ const IMG_API = 'https://api.promiedos.com.ar/images';
 const LEAGUE_PATH = '/league/liga-profesional/hc';
 const UA = 'Mozilla/5.0 (director-deportivo-ar scraper)';
 const DELAY_MS = 400;
+const PRIMERA_NACIONAL_PATH = '/league/primera-nacional/ebj';
+const CUP_SOURCES = [
+  { key: 'libertadores', name: 'Copa Libertadores', edition: 2026, path: '/league/libertadores/bac' },
+  { key: 'sudamericana', name: 'Copa Sudamericana', edition: 2026, path: '/league/conmebol-sudamericana/dij' },
+];
+const COUNTRY_BASE_RATING = { cb: 71, baj: 65, fb: 65, bai: 64, bbb: 64, ci: 63, bbc: 62, bbd: 60, bba: 60 };
+const DEFAULT_COUNTRY_BASE_RATING = 62;
+const COPA_ARGENTINA = { name: 'Copa Argentina', edition: 2026, path: '/league/copa-argentina/gea', stage: '32avos de final' };
+const LOWER_DIVISION_BASE_RATING = 57;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -54,7 +63,7 @@ const POSITION_MAP = {
   'Delantero Izquierdo': 'LW',
   'Delantero Derecho': 'RW',
   'Centro Delantero': 'ST',
-  'Segundo Delantero': 'ST',
+  'Segundo Delantero': 'CF',
 };
 const GROUP_FALLBACK = { Arqueros: 'GK', Defensores: 'CB', Mediocampistas: 'CM', Delanteros: 'ST' };
 const unmappedPositions = new Set();
@@ -77,7 +86,7 @@ const CLUB_TIER = {
 const TIER_BASE_RATING = { 1: 73, 2: 69, 3: 65 };
 const POSITION_VALUE = {
   GK: 0.65, CB: 0.85, LB: 0.8, RB: 0.8, LWB: 0.8, RWB: 0.8,
-  CDM: 0.95, CM: 1, CAM: 1.1, LM: 1, RM: 1, LW: 1.1, RW: 1.1, ST: 1.2,
+  CDM: 0.95, CM: 1, CAM: 1.1, LM: 1, RM: 1, LW: 1.1, RW: 1.1, CF: 1.15, ST: 1.2,
 };
 
 // Deterministic pseudo-random in [0, 1) from a string, so reruns are stable.
@@ -286,6 +295,163 @@ async function scrapeForeignSource(source, countries) {
   return clubs;
 }
 
+// ─── League tables, cups, promotion ──────────────────────────────────────────
+const isSecondaryTeam = (t) => t.url_name.endsWith('-reserves') || t.url_name.includes('(w)');
+const tablesOf = (group) => (group?.tables ?? []).map((t) => ({ name: t.name?.trim(), rows: t.table?.rows ?? t.rows ?? [] }));
+const findGroup = (pageData, part) => (pageData.tables_groups ?? []).find((g) => g.name?.includes(part));
+const rowValue = (row, key) => Number(row.values?.find((v) => v.key === key)?.value);
+
+function parseLeagueInfo(pageData, clubIds) {
+  const zones = { A: [], B: [] };
+  for (const table of tablesOf(findGroup(pageData, 'Apertura'))) {
+    const zone = table.name?.match(/Zona ([AB])/)?.[1];
+    if (!zone) continue;
+    zones[zone] = table.rows.map((r) => r.entity?.object?.id).filter((id) => clubIds.has(id));
+  }
+  const promedios = {};
+  // The group name is empty on the live page; the label lives on the table itself.
+  const promediosTables = (pageData.tables_groups ?? []).flatMap(tablesOf).filter((t) => t.name?.includes('Promedios'));
+  for (const table of promediosTables) {
+    for (const row of table.rows) {
+      const id = row.entity?.object?.id;
+      if (!clubIds.has(id)) continue;
+      promedios[id] = { points: rowValue(row, 'Points') || 0, played: rowValue(row, 'GamePlayed') || 0 };
+    }
+  }
+  return { name: 'Liga Profesional', zones, promedios };
+}
+
+const teamCache = new Map();
+async function fetchTeamCached(team, opts) {
+  if (teamCache.has(team.id)) return teamCache.get(team.id);
+  await sleep(DELAY_MS);
+  const { data } = await fetchNextData(`/team/${team.url_name}/${team.id}`);
+  const club = parseTeam(team, data.props.pageProps.data, opts);
+  teamCache.set(team.id, club);
+  return club;
+}
+
+function bestElevenStrength(players) {
+  const top = [...players].sort((a, b) => b.rating - a.rating).slice(0, 11);
+  if (!top.length) return null;
+  return Math.round((top.reduce((n, p) => n + p.rating, 0) / top.length) * 10) / 10;
+}
+
+async function scrapeCup(source, countries, clubIds) {
+  const { data } = await fetchNextData(source.path);
+  const group = findGroup(data.props.pageProps.data, 'Fase de grupos') ?? data.props.pageProps.data.tables_groups?.[0];
+  const seen = new Map();
+  const argentineTeams = [];
+  for (const table of tablesOf(group)) {
+    for (const row of table.rows) {
+      const t = row.entity?.object;
+      if (!t) continue;
+      if (t.country_id === ARGENTINE) {
+        if (clubIds.has(t.id) && !argentineTeams.includes(t.id)) argentineTeams.push(t.id);
+      } else if (!seen.has(t.id)) seen.set(t.id, t);
+    }
+  }
+  const teams = [];
+  for (const t of seen.values()) {
+    const baseRating = COUNTRY_BASE_RATING[t.country_id] ?? DEFAULT_COUNTRY_BASE_RATING;
+    let strength = baseRating;
+    try {
+      const club = await fetchTeamCached(t, { tier: 2, baseRating });
+      strength = bestElevenStrength(club.players) ?? baseRating;
+    } catch (err) {
+      console.warn(`  cup team ${t.name}: ${err.message}; using base rating ${baseRating}`);
+    }
+    countries.add(t.country_id);
+    await download(`${IMG_API}/team/${t.id}/1`, join(ROOT, 'public/img/crests', `${t.id}.png`));
+    teams.push({
+      id: t.id, slug: t.url_name, name: t.name, shortName: t.short_name, country: t.country_id,
+      colors: { primary: t.colors?.color ?? '#444444', text: t.colors?.text_color ?? '#FFFFFF' }, strength,
+    });
+  }
+  console.log(`${source.name}: ${teams.length} foreign teams, ${argentineTeams.length} Argentine`);
+  return { name: source.name, edition: source.edition, teams, argentineTeams };
+}
+
+async function scrapeCopaArgentina(clubIds, promotionPool) {
+  const { data } = await fetchNextData(COPA_ARGENTINA.path);
+  const stage = data.props.pageProps.data.brackets?.stages?.find((st) => st.name === COPA_ARGENTINA.stage);
+  if (!stage) throw new Error(`stage "${COPA_ARGENTINA.stage}" not found`);
+  const poolById = new Map(promotionPool.map((c) => [c.id, c]));
+  const primeraIds = [];
+  const others = new Map();
+  for (const group of stage.groups ?? []) {
+    // Games carry the full team objects (url_name, colors); bracket participants may not.
+    const detailed = new Map((group.games ?? []).flatMap((g) => g.teams ?? []).map((t) => [t.id, t]));
+    for (const p of group.participants ?? []) {
+      if (clubIds.has(p.id)) {
+        if (!primeraIds.includes(p.id)) primeraIds.push(p.id);
+      } else if (!others.has(p.id)) {
+        others.set(p.id, { ...p, ...detailed.get(p.id) });
+      }
+    }
+  }
+  const teams = [];
+  let fallbacks = 0;
+  for (const t of others.values()) {
+    const pooled = poolById.get(t.id);
+    let strength = LOWER_DIVISION_BASE_RATING;
+    if (pooled) {
+      strength = bestElevenStrength(pooled.players) ?? LOWER_DIVISION_BASE_RATING;
+    } else if (t.url_name) {
+      try {
+        const club = await fetchTeamCached(t, { tier: 3, baseRating: LOWER_DIVISION_BASE_RATING });
+        strength = bestElevenStrength(club.players) ?? LOWER_DIVISION_BASE_RATING;
+      } catch (err) {
+        console.warn(`  copa team ${t.name}: ${err.message}; using base rating ${strength}`);
+        fallbacks++;
+      }
+    } else {
+      console.warn(`  copa team ${t.name}: no url_name; using base rating ${strength}`);
+      fallbacks++;
+    }
+    await download(`${IMG_API}/team/${t.id}/1`, join(ROOT, 'public/img/crests', `${t.id}.png`));
+    teams.push({
+      id: t.id, slug: t.url_name ?? null, name: t.name, shortName: t.short_name,
+      colors: { primary: t.colors?.color ?? '#555555', text: t.colors?.text_color ?? '#FFFFFF' },
+      strength, inPromotionPool: Boolean(pooled),
+    });
+  }
+  console.log(`${COPA_ARGENTINA.name}: ${primeraIds.length} Primera, ${teams.length} other teams, ${fallbacks} strength fallbacks`);
+  return { name: COPA_ARGENTINA.name, edition: COPA_ARGENTINA.edition, primeraIds, teams };
+}
+
+async function scrapePromotionPool(size = 10) {
+  const { data } = await fetchNextData(PRIMERA_NACIONAL_PATH);
+  const pageData = data.props.pageProps.data;
+  const columns = tablesOf(pageData.tables_groups?.[0]).map((t) =>
+    t.rows.map((r) => r.entity?.object).filter((t2) => t2 && !isSecondaryTeam(t2)));
+  const ordered = [];
+  const seen = new Set();
+  for (let i = 0; i < Math.max(0, ...columns.map((c) => c.length)); i++) {
+    for (const col of columns) {
+      const t = col[i];
+      if (t && !seen.has(t.id)) { seen.add(t.id); ordered.push(t); }
+    }
+  }
+  const pool = [];
+  for (const t of ordered) {
+    if (pool.length >= size) break;
+    try {
+      const club = await fetchTeamCached(t, { tier: 3, baseRating: 61 });
+      if (club.players.length < 15) {
+        console.warn(`skip promotion candidate ${club.name}: only ${club.players.length} players`);
+        continue;
+      }
+      await download(`${IMG_API}/team/${t.id}/1`, join(ROOT, 'public/img/crests', `${t.id}.png`));
+      pool.push(club);
+      console.log(`Promotion pool: ${club.name}, ${club.players.length} players`);
+    } catch (err) {
+      console.warn(`skip promotion candidate ${t.name}: ${err.message}`);
+    }
+  }
+  return pool;
+}
+
 async function main() {
   const { data: league } = await fetchNextData(LEAGUE_PATH);
   const teams = extractTeams(league.props.pageProps);
@@ -316,12 +482,39 @@ async function main() {
     }
   }
 
+  const clubIds = new Set(clubs.map((c) => c.id));
+  const leagueInfo = parseLeagueInfo(league.props.pageProps.data, clubIds);
+  console.log(`League: zones A=${leagueInfo.zones.A.length} B=${leagueInfo.zones.B.length}, promedios=${Object.keys(leagueInfo.promedios).length}`);
+
+  const cups = {};
+  for (const source of CUP_SOURCES) {
+    try {
+      cups[source.key] = await scrapeCup(source, countries, clubIds);
+    } catch (err) {
+      console.warn(`skip cup ${source.name}: ${err.message}`);
+    }
+  }
+
+  let promotionPool = [];
+  try {
+    promotionPool = await scrapePromotionPool();
+  } catch (err) {
+    console.warn(`skip promotion pool: ${err.message}`);
+  }
+  try {
+    cups.copaArgentina = await scrapeCopaArgentina(clubIds, promotionPool);
+  } catch (err) {
+    console.warn(`skip cup ${COPA_ARGENTINA.name}: ${err.message}`);
+  }
+
+  promotionPool.forEach((c) => c.players.forEach((p) => countries.add(p.nat)));
+
   for (const c of countries) {
     if (c) await download(`${IMG_API}/country/${c}/1`, join(ROOT, 'public/img/flags', `${c}.png`));
   }
 
   clubs.sort((a, b) => a.name.localeCompare(b.name, 'es'));
-  const payload = { scrapedAt: new Date().toISOString(), source: SITE, clubs, foreignClubs };
+  const payload = { scrapedAt: new Date().toISOString(), source: SITE, league: leagueInfo, cups, clubs, foreignClubs, promotionPool };
   const out = join(ROOT, 'public/data/clubs.js');
   await mkdir(dirname(out), { recursive: true });
   await writeFile(out, `// Generated by scripts/scrape.mjs. Do not edit by hand.\nwindow.LEAGUE_DATA = ${JSON.stringify(payload)};\n`);
