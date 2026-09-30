@@ -21,6 +21,9 @@ Original game covers 6 Premier League clubs. User wants the same experience with
 - [x] T1 Scraper + value formula -> `public/data/clubs.js`, crests, flags. Route: inline (single file, understood).
 - [x] T2 Game UI + logic (index.html, css, js). Route: delegated writer (2+ non-trivial files).
 - [x] T3 Smoke check in browser at mobile width, fix issues.
+- [x] T4 Scraper: international market (Brasileirão top 5/club, Uruguay top 4/club, Argentines >=28 in top-5 Europe + Portugal, >=26 in MLS/Liga MX) -> LEAGUE_DATA.foreignClubs. Route: inline.
+- [ ] T5 Rename game to "EL DT"; integrate foreignClubs into signing market (region filter, league label); README. Route: delegated writer.
+- [ ] T6 Push to GitHub calotwm/ELDT (user-authorized destination and operation).
 
 ## Acceptance criteria
 - 30 clubs selectable; each squad matches Promiedos.

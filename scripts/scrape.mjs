@@ -106,11 +106,11 @@ function ageValueFactor(age) {
   return 0.15;
 }
 
-function computeRating({ name, age, number, stats }, tier) {
+function computeRating({ name, age, number, stats }, baseRating) {
   const noise = Math.round((hash01(name) - 0.5) * 10); // -5..+5
   const production = Math.min(8, stats.goals * 0.6 + stats.assists * 0.5 + stats.tackles * 0.1);
   const squadRole = number ? 0 : -4; // no shirt number: usually reserve/academy
-  const rating = TIER_BASE_RATING[tier] + noise + production + squadRole + ageRatingDelta(age);
+  const rating = baseRating + noise + production + squadRole + ageRatingDelta(age);
   return Math.max(50, Math.min(88, Math.round(rating)));
 }
 
@@ -140,8 +140,9 @@ function parseStats(stats) {
   return byName;
 }
 
-function parseTeam(team, pageData) {
-  const tier = CLUB_TIER[team.url_name] ?? 3;
+function parseTeam(team, pageData, opts = {}) {
+  const tier = opts.tier ?? CLUB_TIER[team.url_name] ?? 3;
+  const baseRating = opts.baseRating ?? TIER_BASE_RATING[tier];
   const statsByName = parseStats(pageData.stats);
   const info = Object.fromEntries((pageData.team_info ?? []).map((i) => [i.name, i.value]));
   let coach = null;
@@ -159,7 +160,7 @@ function parseTeam(team, pageData) {
       const number = p.num ? Number(p.num) : null;
       const stats = statsByName.get(p.name) ?? { goals: 0, assists: 0, tackles: 0 };
       const pos = mapPosition(p, group.name);
-      const rating = computeRating({ name: p.name, age, number, stats }, tier);
+      const rating = computeRating({ name: p.name, age, number, stats }, baseRating);
       players.push({
         id: `${team.id}-${players.length + 1}`,
         name: p.name,
@@ -191,18 +192,73 @@ function parseTeam(team, pageData) {
   };
 }
 
-function extractTeams(leagueData) {
-  // Teams appear in several places (tables, fixtures); collect unique Argentine clubs.
+function extractTeams(leagueData, { anyCountry = false } = {}) {
+  // Teams appear in several places (tables, fixtures). Keep the league's own clubs:
+  // the majority country, unless the league spans countries (e.g. MLS).
   const teams = new Map();
   const walk = (node) => {
     if (!node || typeof node !== 'object') return;
-    if (typeof node.id === 'string' && node.url_name && node.country_id === 'ba' && node.colors && node.name) {
-      if (!node.url_name.endsWith('-reserves') && !teams.has(node.id)) teams.set(node.id, node);
+    if (typeof node.id === 'string' && node.url_name && node.country_id && node.colors && node.name) {
+      const isSecondary = node.url_name.endsWith('-reserves') || node.url_name.includes('(w)');
+      if (!isSecondary && !teams.has(node.id)) teams.set(node.id, node);
     }
     for (const v of Object.values(node)) walk(v);
   };
   walk(leagueData);
-  return [...teams.values()];
+  const all = [...teams.values()];
+  if (anyCountry) return all;
+  const counts = {};
+  for (const t of all) counts[t.country_id] = (counts[t.country_id] ?? 0) + 1;
+  const main = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
+  return all.filter((t) => t.country_id === main);
+}
+
+// ─── International market ────────────────────────────────────────────────────
+// Players from other leagues who could realistically join an Argentine club:
+// the best of Brazil and Uruguay, plus Argentine veterans abroad who may return.
+const ARGENTINE = 'ba';
+const topRated = (count) => (players) => [...players].sort((a, b) => b.rating - a.rating).slice(0, count);
+const argentinesAged = (minAge) => (players) => players.filter((p) => p.nat === ARGENTINE && p.age >= minAge);
+
+const FOREIGN_SOURCES = [
+  { key: 'brasil', label: 'Brasileirão', region: 'Brasil', path: '/league/brasileirao-serie-a/bbd', baseRating: 71, tier: 1, pick: topRated(5) },
+  { key: 'uruguay', label: 'Liga Uruguaya', region: 'Uruguay', path: '/league/uruguayan-championship/gbh', baseRating: 64, tier: 3, pick: topRated(4) },
+  { key: 'premier', label: 'Premier League', region: 'Europa', path: '/league/premier-league/h', baseRating: 77, tier: 1, pick: argentinesAged(28) },
+  { key: 'laliga', label: 'La Liga', region: 'Europa', path: '/league/laliga/bb', baseRating: 76, tier: 1, pick: argentinesAged(28) },
+  { key: 'seriea', label: 'Serie A', region: 'Europa', path: '/league/serie-a/bh', baseRating: 75, tier: 1, pick: argentinesAged(28) },
+  { key: 'bundesliga', label: 'Bundesliga', region: 'Europa', path: '/league/bundesliga/cf', baseRating: 75, tier: 1, pick: argentinesAged(28) },
+  { key: 'ligue1', label: 'Ligue 1', region: 'Europa', path: '/league/ligue-1/df', baseRating: 74, tier: 1, pick: argentinesAged(28) },
+  { key: 'portugal', label: 'Liga Portugal', region: 'Europa', path: '/league/liga-portugal/hd', baseRating: 72, tier: 1, pick: argentinesAged(28) },
+  { key: 'mls', label: 'MLS', region: 'América', path: '/league/mls/bae', baseRating: 68, tier: 2, pick: argentinesAged(26), anyCountry: true },
+  { key: 'ligamx', label: 'Liga MX', region: 'América', path: '/league/liga-mx/beb', baseRating: 69, tier: 2, pick: argentinesAged(26) },
+];
+
+async function scrapeForeignSource(source, countries) {
+  const { data: league } = await fetchNextData(source.path);
+  const teams = extractTeams(league.props.pageProps, { anyCountry: source.anyCountry });
+  const clubs = [];
+  for (const team of teams) {
+    await sleep(DELAY_MS);
+    let data;
+    try {
+      ({ data } = await fetchNextData(`/team/${team.url_name}/${team.id}`));
+    } catch (err) {
+      console.warn(`  skip ${team.name}: ${err.message}`);
+      continue;
+    }
+    const club = parseTeam(team, data.props.pageProps.data, source);
+    const players = source.pick(club.players);
+    if (!players.length) continue;
+    players.forEach((p) => countries.add(p.nat));
+    await download(`${IMG_API}/team/${team.id}/1`, join(ROOT, 'public/img/crests', `${team.id}.png`));
+    clubs.push({
+      id: club.id, slug: club.slug, name: club.name, shortName: club.shortName, tier: source.tier,
+      colors: club.colors, league: source.label, leagueKey: source.key, region: source.region, players,
+    });
+  }
+  const total = clubs.reduce((n, c) => n + c.players.length, 0);
+  console.log(`${source.label}: ${teams.length} teams, ${total} players picked`);
+  return clubs;
 }
 
 async function main() {
@@ -226,17 +282,26 @@ async function main() {
     console.log(`${club.name}: ${club.players.length} players, coach ${club.coach}`);
   }
 
+  const foreignClubs = [];
+  for (const source of FOREIGN_SOURCES) {
+    try {
+      foreignClubs.push(...(await scrapeForeignSource(source, countries)));
+    } catch (err) {
+      console.warn(`skip league ${source.label}: ${err.message}`);
+    }
+  }
+
   for (const c of countries) {
     if (c) await download(`${IMG_API}/country/${c}/1`, join(ROOT, 'public/img/flags', `${c}.png`));
   }
 
   clubs.sort((a, b) => a.name.localeCompare(b.name, 'es'));
-  const payload = { scrapedAt: new Date().toISOString(), source: SITE, clubs };
+  const payload = { scrapedAt: new Date().toISOString(), source: SITE, clubs, foreignClubs };
   const out = join(ROOT, 'public/data/clubs.js');
   await mkdir(dirname(out), { recursive: true });
   await writeFile(out, `// Generated by scripts/scrape.mjs. Do not edit by hand.\nwindow.LEAGUE_DATA = ${JSON.stringify(payload)};\n`);
   if (unmappedPositions.size) console.warn('Unmapped positions:', [...unmappedPositions].join(', '));
-  console.log(`Wrote ${clubs.length} clubs to ${out}`);
+  console.log(`Wrote ${clubs.length} clubs and ${foreignClubs.length} foreign clubs to ${out}`);
 }
 
 main().catch((err) => {
