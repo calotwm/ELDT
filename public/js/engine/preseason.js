@@ -237,6 +237,14 @@
     const price = M.priceOf(found.player, found.club);
     if (price > career.budget + 1e-9) return fail('No alcanza el presupuesto.', 'budget');
     if (found.club.division && found.club.players.length <= M.SELLER_MIN_SQUAD) return fail(found.club.name + ' no quiere quedarse sin plantel.', 'seller');
+    const pre = career.pre;
+    pre.refused = pre.refused || {};
+    if (pre.refused[playerId]) return fail(found.player.name + ' ya rechazó tu oferta esta pretemporada.', 'refused');
+    const interest = M.interestOf(game.world, career, found.player, found.club);
+    if (!M.decides(career, found.player, interest)) {
+      pre.refused[playerId] = true;
+      return fail(found.player.name + ' rechazó la oferta: busca un club con más prestigio.', 'refused');
+    }
     M.transfer(found.player, found.club, club);
     career.budget = U.round1(career.budget - price);
     career.pre.signings[playerId] = { from: found.club.id, price: price };

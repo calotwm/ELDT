@@ -194,7 +194,7 @@
     ['Colombia', 'Colombia'], ['Chile', 'Chile'], ['Europa', 'Europa'], ['América', 'América']
   ];
   const POS_FILTERS = ['GK', 'CB', 'LB', 'RB', 'CDM', 'CM', 'CAM', 'LM', 'RM', 'LW', 'RW', 'ST', 'CF'];
-  const filters = { q: '', region: '', pos: '' };
+  const filters = { q: '', region: '', pos: '', interested: false };
 
   function chipRow(label, options, current, onPick) {
     const row = h('div', { class: 'chip-row', role: 'group', 'aria-label': label });
@@ -231,12 +231,17 @@
       posRow.appendChild(chipRow('Posición', [['', 'Todas']].concat(POS_FILTERS.map(function (p) {
         return [p, EM.Positions.META[p].short, EM.Positions.META[p].name];
       })), filters.pos, function (v) { filters.pos = v; paintFilters(); paintList(); }));
+      posRow.appendChild(chipRow('Interés', [[true, 'Solo interesados', 'Ocultar jugadores que rechazarían venir']], filters.interested, function () {
+        filters.interested = !filters.interested; paintFilters(); paintList();
+      }));
     }
 
     function paintBudget() {
       const size = EM.Career.userClub(game).players.length;
       UI.clear(budgetChip);
       budgetChip.appendChild(h('span', null, 'Presupuesto disponible ', h('strong', { text: money(career.budget) })));
+      budgetChip.appendChild(h('span', { title: 'Tamaño del club, posición en la tabla, títulos y copas. Los mejores jugadores eligen clubes con prestigio.' },
+        'Prestigio ', h('strong', { text: String(EM.Market.prestigeOf(game.world, career)) })));
       budgetChip.appendChild(h('span', { class: size >= EM.Market.MAX_SQUAD ? 'warn' : '', text: 'Plantel ' + size + '/' + EM.Market.MAX_SQUAD }));
     }
 
@@ -247,22 +252,29 @@
 
     function sign(item) {
       const r = EM.Career.signPlayer(game, item.player.id);
-      if (!r.ok) { UI.toast(r.message); return; }
+      if (!r.ok) {
+        UI.toast(r.message);
+        // A refusal is remembered for the pre-season: repaint so the row says so.
+        if (r.code === 'refused') { app.commit(); keepView(scrollEl, paintList); }
+        return;
+      }
       app.commit();
       keepView(scrollEl, function () { paintBudget(); paintList(); paintSigned(); });
     }
 
     function paintList() {
       UI.clear(list);
-      const res = EM.Career.search(game, { q: filters.q.trim(), region: filters.region, pos: filters.pos });
+      const res = EM.Career.search(game, { q: filters.q.trim(), region: filters.region, pos: filters.pos, interested: filters.interested });
       const full = EM.Career.userClub(game).players.length >= EM.Market.MAX_SQUAD;
       if (!res.items.length) { list.appendChild(h('p', { class: 'empty', text: 'No se encontraron jugadores.' })); return; }
       res.items.forEach(function (item) {
         const row = UI.playerRow(item.player, {
           extra: regionLabel(item), club: regionLabel(item), price: item.price, disabled: full || item.price > career.budget + 1e-9,
-          note: item.player.nat === 'ba' && item.region !== 'ARG' ? 'Vuelve' : null, onClick: function () { sign(item); }
+          note: [item.player.nat === 'ba' && item.region !== 'ARG' ? 'Vuelve' : null, item.interest.label].filter(Boolean).join(' · '),
+          onClick: function () { sign(item); }
         });
         row.dataset.id = item.player.id;
+        row.classList.add('interest-' + item.interest.level);
         list.appendChild(row);
       });
       if (res.total > res.items.length) {

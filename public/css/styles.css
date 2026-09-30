@@ -671,3 +671,8 @@ table.standings { width: 100%; border-collapse: separate; border-spacing: 0; fon
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
 }
+
+/* Market: player interest in joining the user club */
+.market .interest-no { opacity: 0.55; }
+.market .interest-no .pr-m { color: var(--red); }
+.market .interest-maybe .pr-m { color: var(--gold); }

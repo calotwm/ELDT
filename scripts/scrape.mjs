@@ -145,7 +145,16 @@ const FAME_BONUS = { 3: { value: 6, rating: 3 }, 2: { value: 3, rating: 2 } };
 const FAME_BY_NAME = new Map(Object.entries(FAME).flatMap(([level, names]) => names.map((n) => [n, Number(level)])));
 const fameMatches = new Set();
 
+// Game-design overrides (user request): Messi is the hardest signing in the game.
+const PLAYER_OVERRIDE = { 'Lionel Messi': { rating: 85, value: 30 } };
+
 function applyFame(player) {
+  const famous = applyFameBonus(player);
+  const override = PLAYER_OVERRIDE[player.name];
+  return override ? { ...famous, ...override } : famous;
+}
+
+function applyFameBonus(player) {
   const fame = FAME_BY_NAME.get(player.name);
   if (!fame) return player;
   fameMatches.add(player.name);
@@ -270,6 +279,39 @@ const FOREIGN_SOURCES = [
   { key: 'ligamx', label: 'Liga MX', region: 'América', path: '/league/liga-mx/beb', baseRating: 69, tier: 2, pick: argentinesAged(26) },
 ];
 
+// Younger Argentines in Europe (not picked by the age filter): the best EUROPE_EXTRA_COUNT join the market.
+const EUROPE_EXTRA_COUNT = 15;
+const europeExtras = [];
+
+function foreignClubEntry(club, source, players) {
+  return {
+    id: club.id, slug: club.slug, name: club.name, shortName: club.shortName, tier: source.tier,
+    colors: club.colors, league: source.label, leagueKey: source.key, region: source.region, players,
+  };
+}
+
+function collectEuropeExtras(club, source, picked) {
+  const pickedIds = new Set(picked.map((p) => p.id));
+  for (const p of club.players) {
+    if (p.nat === ARGENTINE && !pickedIds.has(p.id)) europeExtras.push({ player: p, club, source });
+  }
+}
+
+async function addEuropeExtras(foreignClubs, countries) {
+  const best = europeExtras.sort((a, b) => b.player.rating - a.player.rating).slice(0, EUROPE_EXTRA_COUNT);
+  for (const { player, club, source } of best) {
+    let entry = foreignClubs.find((c) => c.id === club.id);
+    if (!entry) {
+      entry = foreignClubEntry(club, source, []);
+      foreignClubs.push(entry);
+      await download(`${IMG_API}/team/${club.id}/1`, join(ROOT, 'public/img/crests', `${club.id}.png`));
+    }
+    entry.players.push(player);
+    countries.add(player.nat);
+  }
+  console.log(`Europe extras: ${best.map((e) => `${e.player.name} (${e.player.rating})`).join(', ')}`);
+}
+
 async function scrapeForeignSource(source, countries) {
   const { data: league } = await fetchNextData(source.path);
   const teams = extractTeams(league.props.pageProps, { anyCountry: source.anyCountry });
@@ -285,13 +327,11 @@ async function scrapeForeignSource(source, countries) {
     }
     const club = parseTeam(team, data.props.pageProps.data, source);
     const players = source.pick(club.players);
+    if (source.region === 'Europa') collectEuropeExtras(club, source, players);
     if (!players.length) continue;
     players.forEach((p) => countries.add(p.nat));
     await download(`${IMG_API}/team/${team.id}/1`, join(ROOT, 'public/img/crests', `${team.id}.png`));
-    clubs.push({
-      id: club.id, slug: club.slug, name: club.name, shortName: club.shortName, tier: source.tier,
-      colors: club.colors, league: source.label, leagueKey: source.key, region: source.region, players,
-    });
+    clubs.push(foreignClubEntry(club, source, players));
   }
   const total = clubs.reduce((n, c) => n + c.players.length, 0);
   console.log(`${source.label}: ${teams.length} teams, ${total} players picked`);
@@ -486,6 +526,7 @@ async function main() {
       console.warn(`skip league ${source.label}: ${err.message}`);
     }
   }
+  await addEuropeExtras(foreignClubs, countries);
 
   const clubIds = new Set(clubs.map((c) => c.id));
   const leagueInfo = parseLeagueInfo(league.props.pageProps.data, clubIds);
