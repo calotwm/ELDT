@@ -3,125 +3,42 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>EL DT</title>
-  <meta name="description" content="Simulador de director deportivo del fútbol argentino" />
+  <meta name="theme-color" content="#070b17" />
+  <title>ELMANAGER</title>
+  <meta name="description" content="ELMANAGER: juego de director deportivo del fútbol argentino. Elegí un club, armá el plantel y llevalo 5 temporadas." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
-  <div id="app">
-
-    <!-- ============ INTRO SCREEN ============ -->
-    <section id="screen-intro" class="screen active" aria-label="Elegir club">
-      <h1 class="intro-title">EL DT</h1>
-      <p class="intro-sub">Elegí tu club, armá el plantel y llevalo a la temporada 2027.</p>
-
-      <label class="field-label" for="club-search">Elegí tu club</label>
-      <input id="club-search" class="text-input club-search" type="search" placeholder="Buscar club..." autocomplete="off" />
-      <div id="club-grid" class="club-grid" role="listbox" aria-label="Clubes disponibles"></div>
-
-      <div id="club-summary" class="club-summary" aria-live="polite"></div>
-
-      <label class="field-label" for="director-name">Tu nombre</label>
-      <input id="director-name" class="text-input" type="text" placeholder="Nombre del director deportivo" maxlength="40" />
-
-      <label class="field-label" for="budget-slider">Presupuesto de pases</label>
-      <div class="budget-row">
-        <span>US$ 0M</span>
-        <span id="budget-value" class="budget-value">US$ 40.0M</span>
-        <span>US$ 60M</span>
-      </div>
-      <input id="budget-slider" class="budget-slider" type="range" min="0" max="60" step="0.5" value="40" />
-
-      <div class="intro-actions">
-        <button id="start-btn" class="btn btn-primary btn-block" disabled>Empezar temporada 2027</button>
-      </div>
-    </section>
-
-    <!-- ============ HUB SCREEN ============ -->
-    <section id="screen-hub" class="screen" aria-label="Panel de gestión">
-      <header class="hub-header">
-        <div class="hub-header-top">
-          <div class="hub-club">
-            <img id="hub-crest" src="" alt="" />
-            <div>
-              <div id="hub-club-name" class="hub-club-name">—</div>
-              <div id="hub-director" class="hub-club-director">—</div>
-            </div>
-          </div>
-          <div class="hub-season">TEMP. 2027</div>
-        </div>
-        <div class="hub-stats">
-          <div class="hub-stat">
-            <div id="hub-budget" class="hub-stat-value">US$ 0M</div>
-            <div class="hub-stat-label">Presupuesto</div>
-          </div>
-          <div class="hub-stat">
-            <div id="hub-squad" class="hub-stat-value">0</div>
-            <div class="hub-stat-label">Plantel</div>
-          </div>
-          <div class="hub-stat">
-            <div id="hub-tasks" class="hub-stat-value">0/5</div>
-            <div class="hub-stat-label">Tareas</div>
-          </div>
-        </div>
-      </header>
-
-      <div id="task-grid" class="task-grid"></div>
-
-      <div class="simulate-bar">
-        <button id="simulate-btn" class="btn btn-primary btn-block" disabled>Simular temporada</button>
-        <p id="simulate-hint" class="simulate-hint">Completá las 5 tareas para simular la temporada.</p>
-      </div>
-    </section>
-
-    <!-- ============ RESULTS SCREEN ============ -->
-    <section id="screen-results" class="screen" aria-label="Resultado de la temporada">
-      <div id="results-body"></div>
-    </section>
-
-  </div>
-
-  <!-- ============ TASK SHEET (generic bottom sheet) ============ -->
-  <div id="sheet-overlay" class="overlay hidden" role="presentation">
-    <div class="overlay-backdrop" id="sheet-backdrop"></div>
-    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" id="sheet-panel">
-      <div class="sheet-grabber"></div>
-      <div class="sheet-header">
-        <span id="sheet-icon" class="sheet-icon">⚽</span>
-        <h2 id="sheet-title" class="sheet-title">Tarea</h2>
-        <button id="sheet-close" class="sheet-close" aria-label="Cerrar">✕</button>
-      </div>
-      <div id="sheet-body" class="sheet-body"></div>
-      <div id="sheet-footer" class="sheet-footer"></div>
-    </div>
-  </div>
-
-  <!-- ============ PICKER SHEET (formation slot player picker) ============ -->
-  <div id="picker-overlay" class="overlay hidden" role="presentation" style="z-index: 200;">
-    <div class="overlay-backdrop" id="picker-backdrop"></div>
-    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="picker-title">
-      <div class="sheet-grabber"></div>
-      <div class="sheet-header">
-        <span class="sheet-icon">🎯</span>
-        <h2 id="picker-title" class="sheet-title">Elegir jugador</h2>
-        <button id="picker-close" class="sheet-close" aria-label="Cerrar">✕</button>
-      </div>
-      <div id="picker-body" class="sheet-body"></div>
-    </div>
-  </div>
-
+  <div id="app"></div>
+  <div id="modal-root"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <noscript><p class="noscript">ELMANAGER necesita JavaScript para funcionar.</p></noscript>
 
   <script src="data/clubs.js"></script>
-  <script src="js/formations.js"></script>
-  <script src="js/logic.js"></script>
-  <script src="js/state.js"></script>
-  <script src="js/ui-common.js"></script>
-  <script src="js/screens.js"></script>
-  <script src="js/tasks.js"></script>
-  <script src="js/main.js"></script>
+  <script src="js/engine/util.js"></script>
+  <script src="js/engine/positions.js"></script>
+  <script src="js/engine/players.js"></script>
+  <script src="js/engine/match.js"></script>
+  <script src="js/engine/squad.js"></script>
+  <script src="js/engine/league.js"></script>
+  <script src="js/engine/cups.js"></script>
+  <script src="js/engine/season.js"></script>
+  <script src="js/engine/market.js"></script>
+  <script src="js/engine/preseason.js"></script>
+  <script src="js/engine/career.js"></script>
+  <script src="js/engine/save.js"></script>
+
+  <script src="js/ui/core.js"></script>
+  <script src="js/ui/title.js"></script>
+  <script src="js/ui/setup.js"></script>
+  <script src="js/ui/hub.js"></script>
+  <script src="js/ui/pitch.js"></script>
+  <script src="js/ui/tasks.js"></script>
+  <script src="js/ui/results.js"></script>
+  <script src="js/ui/summary.js"></script>
+  <script src="js/ui/app.js"></script>
 </body>
 </html>
