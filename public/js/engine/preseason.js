@@ -314,12 +314,22 @@
     return { ok: true };
   }
 
+  // Tries every formation with its best XI and keeps the strongest one (replaces the current lineup).
   function autoFill(game) {
     const err = gate(game, 'formation');
     if (err) return err;
-    S.fillEmpty(game.career, userClub(game));
+    const players = userClub(game).players;
+    let best = null;
+    EM.Positions.FORMATION_NAMES.forEach(function (name) {
+      const xi = S.bestXI(players, name);
+      if (!best || xi.strength > best.strength) best = xi;
+    });
+    const lineup = game.career.lineup;
+    lineup.formation = best.formation;
+    lineup.slots = {};
+    Object.keys(best.slots).forEach(function (slotId) { lineup.slots[slotId] = best.slots[slotId].id; });
     game.career.tasks.formation = false;
-    return { ok: true };
+    return { ok: true, formation: best.formation, strength: U.round1(best.strength) };
   }
 
   function confirmFormation(game) {
