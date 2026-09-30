@@ -256,7 +256,10 @@ const argentinesAged = (minAge) => (players) => players.filter((p) => p.nat === 
 
 const FOREIGN_SOURCES = [
   { key: 'brasil', label: 'Brasileirão', region: 'Brasil', path: '/league/brasileirao-serie-a/bbd', baseRating: 71, tier: 1, pick: topRated(5) },
-  { key: 'uruguay', label: 'Liga Uruguaya', region: 'Uruguay', path: '/league/uruguayan-championship/gbh', baseRating: 64, tier: 3, pick: topRated(4) },
+  { key: 'uruguay', label: 'Liga Uruguaya', region: 'Uruguay', path: '/league/uruguayan-championship/gbh', baseRating: 64, tier: 3, pick: topRated(5) },
+  { key: 'paraguay', label: 'Liga Paraguaya', region: 'Paraguay', path: '/league/copa-de-primera/gcb', baseRating: 63, tier: 3, pick: topRated(5) },
+  { key: 'colombia', label: 'Liga BetPlay', region: 'Colombia', path: '/league/liga-betplay/gca', baseRating: 65, tier: 2, pick: topRated(5) },
+  { key: 'chile', label: 'Liga Chilena', region: 'Chile', path: '/league/campeonato-nacional/bdf', baseRating: 63, tier: 3, pick: topRated(5) },
   { key: 'premier', label: 'Premier League', region: 'Europa', path: '/league/premier-league/h', baseRating: 77, tier: 1, pick: argentinesAged(28) },
   { key: 'laliga', label: 'La Liga', region: 'Europa', path: '/league/laliga/bb', baseRating: 76, tier: 1, pick: argentinesAged(28) },
   { key: 'seriea', label: 'Serie A', region: 'Europa', path: '/league/serie-a/bh', baseRating: 75, tier: 1, pick: argentinesAged(28) },
@@ -321,14 +324,16 @@ function parseLeagueInfo(pageData, clubIds) {
   return { name: 'Liga Profesional', zones, promedios };
 }
 
-const teamCache = new Map();
+// Caches raw team page data by id, so a team needed by several sections is fetched once
+// but can still be parsed with each section's own rating options.
+const teamPageCache = new Map();
 async function fetchTeamCached(team, opts) {
-  if (teamCache.has(team.id)) return teamCache.get(team.id);
-  await sleep(DELAY_MS);
-  const { data } = await fetchNextData(`/team/${team.url_name}/${team.id}`);
-  const club = parseTeam(team, data.props.pageProps.data, opts);
-  teamCache.set(team.id, club);
-  return club;
+  if (!teamPageCache.has(team.id)) {
+    await sleep(DELAY_MS);
+    const { data } = await fetchNextData(`/team/${team.url_name}/${team.id}`);
+    teamPageCache.set(team.id, data.props.pageProps.data);
+  }
+  return parseTeam(team, teamPageCache.get(team.id), opts);
 }
 
 function bestElevenStrength(players) {
