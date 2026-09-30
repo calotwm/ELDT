@@ -118,7 +118,7 @@
     main.className = 'player-main';
     var name = document.createElement('div');
     name.className = 'player-name';
-    name.textContent = player.name;
+    name.textContent = (player.fame ? '★ ' : '') + player.name;
     var meta = document.createElement('div');
     meta.className = 'player-meta';
     meta.textContent = (opts.metaExtra ? opts.metaExtra + ' · ' : '') + player.age + ' años';
