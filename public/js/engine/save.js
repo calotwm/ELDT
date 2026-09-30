@@ -3,7 +3,7 @@
 (function (EM) {
   'use strict';
 
-  const KEY = 'elmanager.save.v1';
+  const KEY = 'elmanager.save.v2';
 
   // localStorage can be missing (Node, private mode) or throw on access.
   function store() {

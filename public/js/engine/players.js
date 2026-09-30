@@ -42,19 +42,10 @@
 
   // Deterministic from the name so a re-scraped roster keeps the same hidden values.
   function initPlayer(p, clubId, rng) {
-    const h = U.hash01(p.name + '#contract');
-    let contract = 1 + Math.floor(h * 3);
-    if (p.age <= 24 || p.rating >= 74) contract += 1;
     p.clubId = clubId;
     p.potential = Math.min(92, p.rating + potentialBonus(p.age, p.name));
-    p.contract = U.clamp(contract, 1, 4);
-    p.injury = 0;
-    p.listed = null;
     p.loan = null;
-    p.youth = false;
-    p.captain = false;
     p.season = { apps: 0, goals: 0, assists: 0 };
-    p.career = { apps: 0, goals: 0, assists: 0, seasons: 0 };
     return p;
   }
 
@@ -129,8 +120,6 @@
     };
     initPlayer(p, clubId, rng);
     p.potential = Math.min(88, rating + rng.int(8, 18 + q * 2));
-    p.contract = rng.int(2, 4);
-    p.youth = true;
     return p;
   }
 
