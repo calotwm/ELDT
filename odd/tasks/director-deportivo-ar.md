@@ -37,3 +37,5 @@ Strategy: ask-on-risk. Branch `feat/game`.
 - Engram mirror: PENDING (engram reported ambiguous_project; neither listed project matches this repo).
 - T2: delegated writer built public/index.html, css/styles.css, js/{formations,logic,state,ui-common,screens,tasks,main}.js. node --check OK; headless logic test ALL ASSERTIONS PASSED.
 - T3: CDP smoke at 390x844 mobile: full flow (Boca: pre-season, sell, loan, sign, formation, simulate) reached 5/5 and results; no horizontal overflow; no console errors. Fixed: raw country codes in player rows, league table cut off (now DG/Pts fits), English filter chips (now Spanish labels), choice cards as <button>.
+- Review (reliability lens) approved + acknowledged for da1306e. Fixed its 2 warnings: simulate now requires complete XI; undoing sales/loans checks budget and squad cap. Regression script passed.
+- Open suggestion: no committed automated tests (tests live in session scratchpad).

@@ -233,7 +233,9 @@
       footerButtons: [
         U.makeButton('btn btn-ghost', 'Cancelar', U.closeSheet),
         U.makeButton('btn btn-primary', 'Confirmar ventas', function () {
-          GS.setSoldPlayers(state, selected);
+          var result = GS.setSoldPlayers(state, selected);
+          if (result === 'budget') { U.showToast('No podés deshacer esa venta: ya gastaste esa plata.'); return; }
+          if (result === 'squad') { U.showToast('El plantel superaría el máximo de jugadores.'); return; }
           refreshAfterChange(app);
           U.closeSheet();
         })
@@ -284,7 +286,9 @@
       footerButtons: [
         U.makeButton('btn btn-ghost', 'Cancelar', U.closeSheet),
         U.makeButton('btn btn-primary', 'Confirmar préstamos', function () {
-          GS.setLoanedPlayers(state, selected);
+          var result = GS.setLoanedPlayers(state, selected);
+          if (result === 'budget') { U.showToast('No podés deshacer esa venta: ya gastaste esa plata.'); return; }
+          if (result === 'squad') { U.showToast('El plantel superaría el máximo de jugadores.'); return; }
           refreshAfterChange(app);
           U.closeSheet();
         })

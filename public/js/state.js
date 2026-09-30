@@ -64,7 +64,9 @@
   }
 
   function canSimulate(state) {
-    return completedTaskCount(state) === 5 && squadSize(state) >= GameLogic.MIN_SQUAD_TO_SIMULATE;
+    return completedTaskCount(state) === 5 &&
+      formationComplete(state) &&
+      squadSize(state) >= GameLogic.MIN_SQUAD_TO_SIMULATE;
   }
 
   function remainingBudget(state) {
@@ -112,7 +114,10 @@
 
   function unslotPlayer(state, playerId) {
     Object.keys(state.slots).forEach(function (slotId) {
-      if (state.slots[slotId] && state.slots[slotId].id === playerId) delete state.slots[slotId];
+      if (state.slots[slotId] && state.slots[slotId].id === playerId) {
+        delete state.slots[slotId];
+        state.tasks.formation = false;
+      }
     });
   }
 
@@ -120,18 +125,31 @@
     var base = getBaseSquad(state);
     var newlySold = base.filter(function (p) { return ids.indexOf(p.id) !== -1 && state.soldIds.indexOf(p.id) === -1; });
     var unsold = base.filter(function (p) { return ids.indexOf(p.id) === -1 && state.soldIds.indexOf(p.id) !== -1; });
+    // Undoing a sale returns the player, so it must fit the budget and the squad cap.
+    var spentDelta = sumValues(unsold) - sumValues(newlySold);
+    if (state.spent + spentDelta > state.budget) return 'budget';
+    if (squadSize(state) + unsold.length - newlySold.length > GameLogic.MAX_SQUAD_SIZE) return 'squad';
     newlySold.forEach(function (p) { state.spent -= p.value; unslotPlayer(state, p.id); });
     unsold.forEach(function (p) { state.spent += p.value; });
     state.soldIds = ids.slice();
     state.tasks.sell = true;
     invalidateFormationIfNeeded(state);
+    return 'ok';
+  }
+
+  function sumValues(players) {
+    return players.reduce(function (sum, p) { return sum + p.value; }, 0);
   }
 
   function setLoanedPlayers(state, ids) {
+    var returning = state.loanedIds.filter(function (id) { return ids.indexOf(id) === -1; }).length;
+    var leaving = ids.filter(function (id) { return state.loanedIds.indexOf(id) === -1; }).length;
+    if (squadSize(state) + returning - leaving > GameLogic.MAX_SQUAD_SIZE) return 'squad';
     state.loanedIds = ids.slice();
     ids.forEach(function (id) { unslotPlayer(state, id); });
     state.tasks.loan = true;
     invalidateFormationIfNeeded(state);
+    return 'ok';
   }
 
   function signPlayer(state, player, sellerClub) {
@@ -166,6 +184,7 @@
     if (state.formationName !== name) {
       state.formationName = name;
       state.slots = {};
+      state.tasks.formation = false;
     }
   }
 
