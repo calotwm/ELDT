@@ -510,6 +510,22 @@ function oversizedSquadCheck(seed) {
   ok(!EM.Career.signPlayer(game, EM.Career.search(game, {}).items[0].player.id).ok, 'oversized: cannot sign above the cap');
 }
 
+// Stars (rating >= STAR_RATING) refuse every club but the five grandes, and even those only as a long shot.
+function starSigningChecks(seed) {
+  const stars = (game) => EM.Career.search(game, {}).items.filter((i) => i.player.rating >= EM.Market.STAR_RATING);
+  const grandes = DATA.clubs.filter((c) => c.tier === 1);
+  eq(grandes.length, 5, 'stars: five grandes in the data');
+  const small = EM.Career.newGame(DATA, { clubId: DATA.clubs.find((c) => c.tier === 3).id, directorName: 'Test', seed });
+  ok(stars(small).length > 0, 'stars: some stars in the market');
+  ok(stars(small).every((i) => i.interest.level === 'no'), 'stars: a small club cannot sign them');
+  const mid = EM.Career.newGame(DATA, { clubId: DATA.clubs.find((c) => c.tier === 2).id, directorName: 'Test', seed });
+  ok(stars(mid).every((i) => i.interest.level === 'no'), 'stars: a mid-size club cannot sign them');
+  for (const club of grandes) {
+    const items = stars(EM.Career.newGame(DATA, { clubId: club.id, directorName: 'Test', seed }));
+    ok(items.every((i) => i.interest.level !== 'yes' && i.interest.chance <= EM.Market.STAR_MAX_CHANCE), `stars: long shot for ${club.slug}`);
+  }
+}
+
 // Difficulty: flat strength bonus for the user's XI and a money multiplier, both kept across seasons.
 function difficultyChecks(seed) {
   const clubId = DATA.clubs[10].id;
@@ -636,6 +652,7 @@ ok(ca.rate < 0.05, `ascenso Copa Argentina win rate < 5% (got ${(ca.rate * 100).
 copaArgentinaFallback(SEED + 3);
 oversizedSquadCheck(SEED + 4);
 difficultyChecks(SEED + 5);
+starSigningChecks(SEED + 6);
 
 console.log(`${checks} checks, ${failures.length} failures, ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 if (failures.length) {

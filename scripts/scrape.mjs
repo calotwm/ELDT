@@ -77,13 +77,24 @@ function mapPosition(player, groupName) {
 
 // ─── Rating & value formula ──────────────────────────────────────────────────
 // Promiedos has no market values, so we derive a 0-99 rating and a USD value.
+// The five "grandes" of Argentine football; everyone else is a mid-size or small club.
 const CLUB_TIER = {
-  'boca-juniors': 1, 'river-plate': 1,
-  'racing-club': 2, 'independiente': 2, 'san-lorenzo': 2, 'estudiantes-de-la-plata': 2,
-  'velez-sarsfield': 2, 'talleres-cordoba': 2, 'rosario-central': 2, 'lanus': 2,
-  'argentinos-juniors': 2, 'huracan': 2,
+  'boca-juniors': 1, 'river-plate': 1, 'racing-club': 1, 'independiente': 1, 'san-lorenzo': 1,
+  'estudiantes-de-la-plata': 2, 'velez-sarsfield': 2, 'talleres-cordoba': 2, 'rosario-central': 2,
+  'lanus': 2, 'argentinos-juniors': 2, 'huracan': 2, "newell's-old-boys": 2,
 };
-const TIER_BASE_RATING = { 1: 73, 2: 69, 3: 65 };
+const TIER_BASE_RATING = { 1: 71.5, 2: 68.5, 3: 66 };
+// Recent form from the real promedios table (points per game over three seasons) moves a
+// club's base rating around its tier: +/- FORM_MAX_SHIFT points, centered on FORM_PIVOT ppg.
+const FORM_PIVOT = 1.35;
+const FORM_SCALE = 4;
+const FORM_MAX_SHIFT = 2.5;
+
+function formShift(promedio) {
+  if (!promedio?.played) return 0;
+  const shift = (promedio.points / promedio.played - FORM_PIVOT) * FORM_SCALE;
+  return Math.max(-FORM_MAX_SHIFT, Math.min(FORM_MAX_SHIFT, shift));
+}
 const POSITION_VALUE = {
   GK: 0.65, CB: 0.85, LB: 0.8, RB: 0.8, LWB: 0.8, RWB: 0.8,
   CDM: 0.95, CM: 1, CAM: 1.1, LM: 1, RM: 1, LW: 1.1, RW: 1.1, CF: 1.15, ST: 1.2,
@@ -97,11 +108,14 @@ function hash01(str) {
 }
 
 function ageRatingDelta(age) {
+  if (age <= 18) return -8;
   if (age <= 19) return -6;
   if (age <= 21) return -3;
+  if (age <= 23) return -1;
   if (age <= 29) return 0;
   if (age <= 32) return -1;
-  return -3;
+  if (age <= 34) return -3;
+  return -5;
 }
 
 function ageValueFactor(age) {
@@ -115,12 +129,18 @@ function ageValueFactor(age) {
   return 0.15;
 }
 
+function squadRoleDelta(number) {
+  if (!number) return -5; // no shirt number: usually reserve/academy
+  if (number >= 30) return -3; // high numbers: fringe or academy call-ups
+  return 0;
+}
+
 function computeRating({ name, age, number, stats }, baseRating) {
-  const noise = Math.round((hash01(name) - 0.5) * 10); // -5..+5
-  const production = Math.min(8, stats.goals * 0.6 + stats.assists * 0.5 + stats.tackles * 0.1);
-  const squadRole = number ? 0 : -4; // no shirt number: usually reserve/academy
-  const rating = baseRating + noise + production + squadRole + ageRatingDelta(age);
-  return Math.max(50, Math.min(88, Math.round(rating)));
+  // Triangular noise in -5..+5: most players sit near their club level, few stand out.
+  const noise = (hash01(name) + hash01(`${name}#`) - 1) * 5;
+  const production = Math.min(5, stats.goals * 0.5 + stats.assists * 0.4 + stats.tackles * 0.08);
+  const rating = baseRating + noise + production + squadRoleDelta(number) + ageRatingDelta(age);
+  return Math.max(45, Math.min(86, Math.round(rating)));
 }
 
 function computeValue(rating, age, pos) {
@@ -152,18 +172,56 @@ const PLAYER_OVERRIDE = {
   'Giorgian de Arrascaeta': { rating: 82, value: 12 },
 };
 
-function applyFame(player) {
-  const famous = applyFameBonus(player);
+// Game-design rating anchors for well-known players, whose real level a league-wide formula
+// cannot capture (an Argentina starter is not an average Premier League player).
+// Estimates on a FIFA-like scale, not data from Promiedos. Names must match Promiedos exactly.
+const RATING_ANCHOR = {
+  'Emiliano Martínez': 85, 'Gerónimo Rulli': 80, 'Juan Musso': 77, 'Walter Benítez': 77,
+  'Cristian Romero': 84, 'Lisandro Martínez': 82, 'Nicolás Otamendi': 76, 'Leonardo Balerdi': 78,
+  'Facundo Medina': 78, 'Germán Pezzella': 75, 'Nahuel Molina': 79, 'Gonzalo Montiel': 76,
+  'Nicolás Tagliafico': 76, 'Marcos Acuña': 75, 'Juan Foyth': 77, 'Lucas Martínez Quarta': 76,
+  'Enzo Fernández': 85, 'Alexis Mac Allister': 86, 'Rodrigo De Paul': 81, 'Leandro Paredes': 79,
+  'Giovani Lo Celso': 79, 'Exequiel Palacios': 80, 'Thiago Almada': 79, 'Nico Paz': 81,
+  'Franco Mastantuono': 78, 'Valentín Barco': 74, 'Claudio Echeverri': 73, 'Valentín Carboni': 73,
+  'Lautaro Martínez': 88, 'Julián Álvarez': 87, 'Paulo Dybala': 80, 'Ángel Di María': 78,
+  'Alejandro Garnacho': 80, 'Nicolás González': 79, 'Giuliano Simeone': 79, 'Matías Soulé': 79,
+  'Valentín Castellanos': 77, 'Santiago Castro': 75, 'Lucas Beltrán': 74, 'Angel Correa': 77,
+  'Giovanni Simeone': 75, 'Lucas Ocampos': 76,
+};
+// Same idea for foreign stars in the market: [nationality, rating, club slug?]. Nationality and club
+// skip namesakes (Brazilian single names repeat across clubs); re-check clubs after transfers.
+const FOREIGN_RATING_ANCHOR = {
+  'Raphinha': ['cb', 87, 'fc-barcelona'], 'Alisson': ['cb', 88, 'liverpool'], 'Marquinhos': ['cb', 85, 'psg'],
+  'Bremer': ['cb', 83, 'juventus'], 'Joelinton': ['cb', 81, 'newcastle-united'], 'David Neres': ['cb', 80],
+  'Richarlison': ['cb', 79], 'Gabriel Jesus': ['cb', 79], 'Pepê': ['cb', 79, 'fc-porto'],
+  'Raphael Veiga': ['cb', 78], 'Marcão': ['cb', 76, 'sevilla'], 'Diego Carlos': ['cb', 76],
+  'John': ['cb', 76, 'nottingham-forest'], 'Luis Díaz': ['baj', 85], 'Daniel Muñoz': ['baj', 80], 'Jefferson Lerma': ['baj', 78],
+  'Yerry Mina': ['baj', 75], 'Johan Mojica': ['baj', 74], 'José María Giménez': ['bbb', 82],
+  'Rodrigo Bentancur': ['bbb', 80], 'Diego Rossi': ['bbb', 74], 'Omar Alderete': ['bai', 76],
+  'Miguel Almirón': ['bai', 75], 'Andrés Cubas': ['bai', 75], 'Gabriel Suazo': ['ci', 76],
+  'Salomon Rondon': ['bba', 72],
+};
+
+function anchorRating(name, nat, clubSlug) {
+  if (nat === ARGENTINE) return RATING_ANCHOR[name];
+  const anchor = FOREIGN_RATING_ANCHOR[name];
+  if (!anchor || anchor[0] !== nat || (anchor[2] && anchor[2] !== clubSlug)) return undefined;
+  return anchor[1];
+}
+
+function applyFame(player, anchored) {
+  const famous = applyFameBonus(player, anchored);
   const override = PLAYER_OVERRIDE[player.name];
   return override ? { ...famous, ...override } : famous;
 }
 
-function applyFameBonus(player) {
+function applyFameBonus(player, anchored) {
   const fame = FAME_BY_NAME.get(player.name);
   if (!fame) return player;
   fameMatches.add(player.name);
   const bonus = FAME_BONUS[fame];
-  const rating = Math.min(90, player.rating + bonus.rating);
+  // Anchored ratings already reflect fame; only the market value bonus still applies.
+  const rating = anchored ? player.rating : Math.min(88, player.rating + bonus.rating);
   const value = Math.round((player.value + bonus.value) * 10) / 10;
   return { ...player, fame, rating, value };
 }
@@ -187,9 +245,11 @@ function parseStats(stats) {
   return byName;
 }
 
+const anchorMatches = new Set();
+
 function parseTeam(team, pageData, opts = {}) {
   const tier = opts.tier ?? CLUB_TIER[team.url_name] ?? 3;
-  const baseRating = opts.baseRating ?? TIER_BASE_RATING[tier];
+  const baseRating = opts.baseRating ?? TIER_BASE_RATING[tier] + formShift(opts.promedio);
   const statsByName = parseStats(pageData.stats);
   const info = Object.fromEntries((pageData.team_info ?? []).map((i) => [i.name, i.value]));
   let coach = null;
@@ -207,7 +267,9 @@ function parseTeam(team, pageData, opts = {}) {
       const number = p.num ? Number(p.num) : null;
       const stats = statsByName.get(p.name) ?? { goals: 0, assists: 0, tackles: 0 };
       const pos = mapPosition(p, group.name);
-      const rating = computeRating({ name: p.name, age, number, stats }, baseRating);
+      const anchor = anchorRating(p.name, p.country_id, team.url_name);
+      if (anchor) anchorMatches.add(p.name);
+      const rating = anchor ?? computeRating({ name: p.name, age, number, stats }, baseRating);
       players.push(applyFame({
         id: `${team.id}-${players.length + 1}`,
         name: p.name,
@@ -220,7 +282,7 @@ function parseTeam(team, pageData, opts = {}) {
         value: computeValue(rating, age, pos),
         goals: stats.goals,
         assists: stats.assists,
-      }));
+      }, Boolean(anchor)));
     }
   }
 
@@ -262,25 +324,31 @@ function extractTeams(leagueData, { anyCountry = false } = {}) {
 
 // ─── International market ────────────────────────────────────────────────────
 // Players from other leagues who could realistically join an Argentine club:
-// the best of Brazil and Uruguay, plus Argentine veterans abroad who may return.
+// the best of each South American league, plus Argentine and South American veterans abroad who may return.
 const ARGENTINE = 'ba';
 const topRated = (count) => (players) => [...players].sort((a, b) => b.rating - a.rating).slice(0, count);
-const argentinesAged = (minAge) => (players) => players.filter((p) => p.nat === ARGENTINE && p.age >= minAge);
 
+// Argentines and other South Americans (any CONMEBOL country) abroad, old enough to consider
+// coming back to the region.
+const CONMEBOL = new Set(['cb', 'bbb', 'bai', 'baj', 'ci', 'bbc', 'bbd', 'bba', 'fb']);
+const returningSouthAmericans = (argentineMinAge, otherMinAge) => (players) => players.filter((p) =>
+  p.age >= (p.nat === ARGENTINE ? argentineMinAge : CONMEBOL.has(p.nat) ? otherMinAge : Infinity));
+
+// Base ratings are for a squad's average player; known stars get RATING_ANCHOR values instead.
 const FOREIGN_SOURCES = [
-  { key: 'brasil', label: 'Brasileirão', region: 'Brasil', path: '/league/brasileirao-serie-a/bbd', baseRating: 71, tier: 1, pick: topRated(5) },
+  { key: 'brasil', label: 'Brasileirão', region: 'Brasil', path: '/league/brasileirao-serie-a/bbd', baseRating: 70, tier: 1, pick: topRated(5) },
   { key: 'uruguay', label: 'Liga Uruguaya', region: 'Uruguay', path: '/league/uruguayan-championship/gbh', baseRating: 64, tier: 3, pick: topRated(5) },
   { key: 'paraguay', label: 'Liga Paraguaya', region: 'Paraguay', path: '/league/copa-de-primera/gcb', baseRating: 63, tier: 3, pick: topRated(5) },
   { key: 'colombia', label: 'Liga BetPlay', region: 'Colombia', path: '/league/liga-betplay/gca', baseRating: 65, tier: 2, pick: topRated(5) },
   { key: 'chile', label: 'Liga Chilena', region: 'Chile', path: '/league/campeonato-nacional/bdf', baseRating: 63, tier: 3, pick: topRated(5) },
-  { key: 'premier', label: 'Premier League', region: 'Europa', path: '/league/premier-league/h', baseRating: 77, tier: 1, pick: argentinesAged(28) },
-  { key: 'laliga', label: 'La Liga', region: 'Europa', path: '/league/laliga/bb', baseRating: 76, tier: 1, pick: argentinesAged(28) },
-  { key: 'seriea', label: 'Serie A', region: 'Europa', path: '/league/serie-a/bh', baseRating: 75, tier: 1, pick: argentinesAged(28) },
-  { key: 'bundesliga', label: 'Bundesliga', region: 'Europa', path: '/league/bundesliga/cf', baseRating: 75, tier: 1, pick: argentinesAged(28) },
-  { key: 'ligue1', label: 'Ligue 1', region: 'Europa', path: '/league/ligue-1/df', baseRating: 74, tier: 1, pick: argentinesAged(28) },
-  { key: 'portugal', label: 'Liga Portugal', region: 'Europa', path: '/league/liga-portugal/hd', baseRating: 72, tier: 1, pick: argentinesAged(28) },
-  { key: 'mls', label: 'MLS', region: 'América', path: '/league/mls/bae', baseRating: 68, tier: 2, pick: argentinesAged(26), anyCountry: true },
-  { key: 'ligamx', label: 'Liga MX', region: 'América', path: '/league/liga-mx/beb', baseRating: 69, tier: 2, pick: argentinesAged(26) },
+  { key: 'premier', label: 'Premier League', region: 'Europa', path: '/league/premier-league/h', baseRating: 74, tier: 1, pick: returningSouthAmericans(28, 29) },
+  { key: 'laliga', label: 'La Liga', region: 'Europa', path: '/league/laliga/bb', baseRating: 73, tier: 1, pick: returningSouthAmericans(28, 29) },
+  { key: 'seriea', label: 'Serie A', region: 'Europa', path: '/league/serie-a/bh', baseRating: 72.5, tier: 1, pick: returningSouthAmericans(28, 29) },
+  { key: 'bundesliga', label: 'Bundesliga', region: 'Europa', path: '/league/bundesliga/cf', baseRating: 72.5, tier: 1, pick: returningSouthAmericans(28, 29) },
+  { key: 'ligue1', label: 'Ligue 1', region: 'Europa', path: '/league/ligue-1/df', baseRating: 71.5, tier: 1, pick: returningSouthAmericans(28, 29) },
+  { key: 'portugal', label: 'Liga Portugal', region: 'Europa', path: '/league/liga-portugal/hd', baseRating: 70, tier: 1, pick: returningSouthAmericans(28, 29) },
+  { key: 'mls', label: 'MLS', region: 'América', path: '/league/mls/bae', baseRating: 67, tier: 2, pick: returningSouthAmericans(26, 28), anyCountry: true },
+  { key: 'ligamx', label: 'Liga MX', region: 'América', path: '/league/liga-mx/beb', baseRating: 68, tier: 2, pick: returningSouthAmericans(26, 28) },
 ];
 
 // Players always added to the foreign market even if the league's pick rule leaves them out (user requests).
@@ -509,13 +577,14 @@ async function main() {
   const { data: league } = await fetchNextData(LEAGUE_PATH);
   const teams = extractTeams(league.props.pageProps);
   console.log(`Found ${teams.length} teams`);
+  const { promedios } = parseLeagueInfo(league.props.pageProps.data, new Set(teams.map((t) => t.id)));
 
   const clubs = [];
   const countries = new Set();
   for (const team of teams) {
     await sleep(DELAY_MS);
     const { data } = await fetchNextData(`/team/${team.url_name}/${team.id}`);
-    const club = parseTeam(team, data.props.pageProps.data);
+    const club = parseTeam(team, data.props.pageProps.data, { promedio: promedios[team.id] });
     if (club.players.length < 15) {
       console.warn(`skip ${club.name}: only ${club.players.length} players`);
       continue;
@@ -574,6 +643,8 @@ async function main() {
   await writeFile(out, `// Generated by scripts/scrape.mjs. Do not edit by hand.\nwindow.LEAGUE_DATA = ${JSON.stringify(payload)};\n`);
   const missingFame = [...FAME_BY_NAME.keys()].filter((n) => !fameMatches.has(n));
   if (missingFame.length) console.warn('Famous players not found:', missingFame.join(', '));
+  const missingAnchors = [...Object.keys(RATING_ANCHOR), ...Object.keys(FOREIGN_RATING_ANCHOR)].filter((n) => !anchorMatches.has(n));
+  if (missingAnchors.length) console.warn('Anchored players not found:', missingAnchors.join(', '));
   if (unmappedPositions.size) console.warn('Unmapped positions:', [...unmappedPositions].join(', '));
   console.log(`Wrote ${clubs.length} clubs and ${foreignClubs.length} foreign clubs to ${out}`);
 }
