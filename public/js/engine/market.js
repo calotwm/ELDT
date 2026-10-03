@@ -31,6 +31,8 @@
   const FAME_DEMAND = { 2: 16, 3: 50 };
   const INTEREST_YES = 5;          // score at or above: the player accepts
   const INTEREST_MAYBE = -10;      // score at or above: the player may accept (deterministic per season)
+  const STAR_RATING = 83;          // stars at or above: only the five grandes can try, and only as a long shot
+  const STAR_MAX_CHANCE = 0.1;
 
   // Club prestige 20..100: size (tier), last season's table position and titles, and current continental cup.
   function prestigeOf(world, career) {
@@ -59,8 +61,14 @@
 
   // { level: 'yes'|'maybe'|'no', label, chance } for a player considering a move to the user club.
   function interestOf(world, career, player, fromClub, prestige) {
+    const star = player.rating >= STAR_RATING;
+    if (star && world.clubs[career.clubId].tier !== 1) return { level: 'no', label: 'Solo escucha a un grande', chance: 0 };
     const p = prestige != null ? prestige : prestigeOf(world, career);
     const score = p - demandOf(world, career, player, fromClub);
+    if (star && score >= INTEREST_MAYBE) {
+      const chance = U.clamp((score - INTEREST_MAYBE) / (INTEREST_YES - INTEREST_MAYBE), 0.03, STAR_MAX_CHANCE);
+      return { level: 'maybe', label: 'Muy difícil', chance: chance };
+    }
     if (score >= INTEREST_YES) return { level: 'yes', label: 'Interesado', chance: 1 };
     if (score >= INTEREST_MAYBE) {
       const chance = U.clamp((score - INTEREST_MAYBE) / (INTEREST_YES - INTEREST_MAYBE), 0.1, 0.9);
@@ -144,6 +152,8 @@
     SELLER_MIN_SQUAD: SELLER_MIN_SQUAD,
     AI_MAX_SQUAD: AI_MAX_SQUAD,
     REGIONS: REGIONS,
+    STAR_RATING: STAR_RATING,
+    STAR_MAX_CHANCE: STAR_MAX_CHANCE,
     regionOf: regionOf,
     priceOf: priceOf,
     prestigeOf: prestigeOf,
