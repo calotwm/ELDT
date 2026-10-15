@@ -30,7 +30,8 @@
         h('h1', { class: 'wordmark', 'aria-label': 'ELMANAGER' }, h('span', { class: 'wm-el', text: 'EL' }), h('span', { class: 'wm-rest', text: 'MANAGER' })),
         h('p', { class: 'title-desc', text: 'Juego de director deportivo del fútbol argentino: elegí un club, armá el plantel y llevalo 5 temporadas por el Apertura, el Clausura, la Copa Argentina y las copas internacionales.' }),
         buttons,
-        cafe),
+        cafe,
+        UI.adSlot('title')),
       h('footer', { class: 'title-foot', text: 'Datos: promiedos.com.ar' }));
     UI.mount(node);
   };

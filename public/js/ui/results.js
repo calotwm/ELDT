@@ -165,6 +165,7 @@
     UI.mount(h('section', { class: 'results', 'aria-label': 'Resultado de la temporada ' + sum.year },
       hero,
       h('div', { class: 'cards' }, cards),
+      UI.adSlot('results'),
       h('div', { class: 'sim-bar' }, UI.btn(label, { kind: 'primary', block: true, cls: 'btn-xl', icon: 'arrow', onClick: app.nextSeason }))));
   };
 })(window.EMUI = window.EMUI || {});
