@@ -49,6 +49,7 @@
             h('th', { class: 'sticky-col', text: 'Año' }), h('th', { text: 'Anual' }), h('th', { text: 'Apertura' }), h('th', { text: 'Clausura' }),
             h('th', { text: 'Copa Argentina' }), h('th', { text: 'Copa internacional' }), h('th', { text: 'Títulos' }))),
           body))),
+      UI.adSlot('summary'),
       h('div', { class: 'sim-bar sim-bar-row' },
         UI.btn('Inicio', { kind: 'ghost', icon: 'home', onClick: app.toTitle }),
         UI.btn('NUEVA PARTIDA', { kind: 'primary', cls: 'btn-xl', icon: 'play', onClick: app.restart }))));

@@ -676,3 +676,8 @@ table.standings { width: 100%; border-collapse: separate; border-spacing: 0; fon
 .market .interest-no { opacity: 0.55; }
 .market .interest-no .pr-m { color: var(--red); }
 .market .interest-maybe .pr-m { color: var(--gold); }
+
+/* Ad units: quiet panel between content blocks, never covering game actions */
+.ad-box { margin: 16px 0; padding: 8px; background: var(--panel); border: 1px solid var(--line); min-height: 90px; }
+.ad-label { display: block; margin-bottom: 4px; font: 600 10px var(--font-head); letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); }
+.ad-title { width: 100%; max-width: 728px; margin: 20px auto 0; }
